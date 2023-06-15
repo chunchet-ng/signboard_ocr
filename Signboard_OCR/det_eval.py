@@ -78,7 +78,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             tiou_recall_str = f'{Ct}_{pG.area()}_{intersection}_{union}'
             return (intersection * funcCt(Ct*1.0/pG.area())) / union, tiou_recall_str
         except Exception as e:
-            return 0
+            return 0, ""
 
 
     def get_text_intersection_over_union_precision(pD, pG, gtNum, gtPolys, gtDontCarePolsNum):
@@ -121,7 +121,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             return (intersection * funcOt(Ot*1.0/pD.area())) / union, tiou_precision_str
         except Exception as e:
             print(e)
-            return 0
+            return 0, ""
 
 
     def get_intersection(pD,pG):
