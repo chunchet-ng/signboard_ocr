@@ -53,18 +53,18 @@ def normalized_edit_distance(gt: List[str], pred: List[str]):
         pred (List[str]): List of predicted text
 
     Returns:
-        total_edit_distance (int): Total edit distance (case-sensitive)
-        total_edit_distance_case_insensitive (int): Total edit distance (case-insensitive)
+        ned (int): Normalized edit distance (case-sensitive)
+        ned_case_insensitive (int): Normalized edit distance (case-insensitive)
     """
     ned = 0
     ned_case_insensitive = 0
     for x, y in zip(gt, pred):
         edit_distance = distance(x, y)
-        ned += (1.0 - float(edit_distance) / max(len(x), len(y)))  
-        
+        ned += (1.0 - float(edit_distance) / max(len(x), len(y)))
+
         edit_distance_case_insensitive = distance(x.upper(), y.upper())
         ned_case_insensitive += (1.0 - float(edit_distance_case_insensitive) / max(len(x), len(y)))
-    
+
     ned /= len(gt)
     ned_case_insensitive /= len(gt)
     return ned, ned_case_insensitive

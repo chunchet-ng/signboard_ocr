@@ -6,17 +6,32 @@ from collections import defaultdict
 
 
 def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config: Dict):
+    """Evaluate the prediction results in terms of TIoU-precision, TIoU-recall and TIoU-HMean.
+    The matching between ground-truth and predicted bounding box is based on the order in the list.
+    In other words, a ground-truth box will match with the first predicted bounding box with IoU > IOU_CONSTRAINT.
+
+    Args:
+        gt_dict (Dict[str, list]): A dictionary with image id as the key and a list of its ground-truth
+         bounding boxes as the value.
+         e.g.: gt_dict = {'img1': [{"transcription": "Hello", "points": [[27, 169], [75, 113], [126, 92], [157, 79], [220, 90], [210, 130], [163, 124], [144, 136], [98, 158], [74, 197]]},
+                                    {"transcription": "World", "points": [[380, 80], [402, 75], [465, 93], [506, 134], [531, 187], [492, 207], [471, 155], [439, 131], [391, 111], [374, 115]]}]}
+        det_dict (Dict[str, list]): A dictionary with image id as the key and a list of its predicted
+         bounding boxes as the value.
+         e.g.: det_dict = {'img1': [{"transcription": "Hello", "points": [[45, 145], [86, 100], [137, 89], [163, 88], [186, 91], [185, 121], [157, 123], [140, 130], [95, 140], [75, 175]]},
+                                    {"transcription": "World", "points": [[388, 77], [431, 84], [466, 97], [486, 118], [500, 138], [481, 164], [467, 142], [441, 125], [419, 116], [384, 109]]}]}
+        eval_config (dict): A dictionary storing the evaluation configuration.
+         e.g.: eval_config = {"IOU_CONSTRAINT": 0.5,
+                            "AREA_PRECISION_CONSTRAINT": 0.5,
+                            "WORD_SPOTTING": True,
+                        }
+    Returns:
+        resDict (Dict): A dict storing overall and per-sample evaluation result
     """
-    Method evaluate_method: evaluate method and returns the results
-        Results. Dictionary with the following values:
-        - method (required)  Global method metrics. Ex: { 'Precision':0.8,'Recall':0.9 }
-        - samples (optional) Per sample metrics. Ex: {'sample1' : { 'Precision':0.8,'Recall':0.9 } , 'sample2' : { 'Precision':0.8,'Recall':0.9 }
-    """      
-    
+
     def polygon_from_points(points):
         """
         Returns a Polygon object to use with the Polygon2 class from a list of 8 points: x1,y1,x2,y2,x3,y3,x4,y4
-        """        
+        """
         num_points = len(points)
         # resBoxes=np.empty([1,num_points],dtype='int32')
         resBoxes=np.empty([1,num_points],dtype='float32')
@@ -30,7 +45,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
         areaA = pD.area()
         areaB = pG.area()
         return areaA + areaB - get_intersection(pD, pG)
-        
+
     def get_intersection_over_union(pD,pG):
         try:
             return get_intersection(pD, pG) / get_union(pD, pG)
@@ -42,13 +57,13 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             return 1
         else:
             return 1-x
-    
+
     def funcOt(x):
         if x<=0.01:
             return 1
         else:
             return 1-x
-    
+
     def get_text_intersection_over_union_recall(pD, pG):
         '''
         Ct (cut): Area of ground truth that is not covered by detection bounding box.
@@ -65,7 +80,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
         except Exception as e:
             return 0
 
-    
+
     def get_text_intersection_over_union_precision(pD, pG, gtNum, gtPolys, gtDontCarePolsNum):
         '''
         Ot: Outlier gt area
@@ -80,7 +95,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
                 if i!= gtNum and gtNum not in gtDontCarePolsNum: # ignore don't care regions
                     if not get_intersection(pD, gtPolys[i]) == 0:
                         if count_initial == 0:
-                            # initial 
+                            # initial
                             gt_union_inside_pD = gtPolys[i]
                             gt_union_inside_pD_and_pG = inside_pG & gtPolys[i]
                             count_initial = 1
@@ -99,7 +114,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
 
             assert(Ot>=0 and Ot<=pD.area()+0.001), 'Invalid Ot value: '+str(Ot)+' '+str(pD.area())
             assert(pD.area()>0), 'Invalid pD: '+str(pD.area())
-            
+
             intersection = get_intersection(pD, pG)
             union = get_union(pD, pG)
             tiou_precision_str = f'{Ot}_{pD.area()}_{intersection}_{union}'
@@ -114,16 +129,16 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
         if len(pInt) == 0:
             return 0
         return pInt.area()
-    
+
     perSampleMetrics = {}
-    
+
     matchedSum = 0
-    matchedSum_iou = 0 
-    matchedSum_tiouGt = 0 
-    matchedSum_tiouDt = 0 
-    matchedSum_cutGt = 0 
+    matchedSum_iou = 0
+    matchedSum_tiouGt = 0
+    matchedSum_tiouDt = 0
+    matchedSum_cutGt = 0
     matchedSum_coverOtherGt = 0
-   
+
     numGlobalCareGt = 0
     numGlobalCareDet = 0
 
@@ -134,29 +149,29 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
     for gt_key, gt_val in gt_dict.items():
         recall = 0
         precision = 0
-        hmean = 0    
-        
+        hmean = 0
+
         detMatched = 0
-        detMatched_iou = 0 
-        detMatched_tiouGt = 0 
-        detMatched_tiouDt = 0 
-        detMatched_cutGt = 0 
-        detMatched_coverOtherGt = 0 
-        
+        detMatched_iou = 0
+        detMatched_tiouGt = 0
+        detMatched_tiouDt = 0
+        detMatched_cutGt = 0
+        detMatched_coverOtherGt = 0
+
         iouMat = np.empty([1,1])
-        
+
         gtPols = []
         detPols = []
-        
+
         gtPolPoints = []
-        detPolPoints = []  
-        
+        detPolPoints = []
+
         #Array of Ground Truth Polygons' keys marked as don't Care
         gtDontCarePolsNum = []
         #Array of Detected Polygons' matched with a don't Care GT
-        detDontCarePolsNum = []   
-        
-        pairs = [] 
+        detDontCarePolsNum = []
+
+        pairs = []
         detMatchedNums = []
 
         if eval_config["WORD_SPOTTING"]:
@@ -164,7 +179,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             detTrans = []
 
         evaluationLog = ""
-        
+
         for n in range(len(gt_val)):
             dict_entry = gt_val[n]
 
@@ -172,7 +187,7 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             for point in dict_entry['points']:
                 points.append(point[0])
                 points.append(point[1])
-            
+
             transcription = dict_entry['transcription']
 
             if eval_config["WORD_SPOTTING"]:
@@ -185,12 +200,12 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             gtPolPoints.append(points)
             if dontCare:
                 gtDontCarePolsNum.append( len(gtPols)-1 )
-                
+
         evaluationLog += "GT polygons: " + str(len(gtPols)) + (" (" + str(len(gtDontCarePolsNum)) + " don't care)\n" if len(gtDontCarePolsNum)>0 else "\n")
-        
+
         # if there's bounding box in prediction
         if gt_key in det_dict.keys():
-            
+
             det_val = det_dict[gt_key]
             for n in range(len(det_val)):
                 dict_entry = det_val[n]
@@ -199,11 +214,11 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
                 for point in dict_entry['points']:
                     points.append(point[0])
                     points.append(point[1])
-                
+
                 if eval_config["WORD_SPOTTING"]:
                     detTrans.append(dict_entry['transcription'])
 
-                detPol = polygon_from_points(points)                    
+                detPol = polygon_from_points(points)
                 detPols.append(detPol)
                 detPolPoints.append(points)
                 if len(gtDontCarePolsNum)>0 :
@@ -215,28 +230,28 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
                         if (precision > eval_config['AREA_PRECISION_CONSTRAINT'] ):
                             detDontCarePolsNum.append( len(detPols)-1 )
                             break
-                                
+
             evaluationLog += "DET polygons: " + str(len(detPols)) + (" (" + str(len(detDontCarePolsNum)) + " don't care)\n" if len(detDontCarePolsNum)>0 else "\n")
-            
+
             if len(gtPols)>0 and len(detPols)>0:
                 #Calculate IoU and precision matrixs
                 outputShape=[len(gtPols),len(detPols)]
                 iouMat = np.empty(outputShape)
                 gtRectMat = np.zeros(len(gtPols),np.int8)
                 detRectMat = np.zeros(len(detPols),np.int8)
-                tiouRecallMat = np.empty(outputShape)  
-                tiouRecallStrMat = defaultdict(dict) 
-                tiouPrecisionMat = np.empty(outputShape)  
-                tiouPrecisionStrMat = defaultdict(dict) 
-                tiouGtRectMat = np.zeros(len(gtPols),np.int8) 
-                tiouDetRectMat = np.zeros(len(detPols),np.int8) 
+                tiouRecallMat = np.empty(outputShape)
+                tiouRecallStrMat = defaultdict(dict)
+                tiouPrecisionMat = np.empty(outputShape)
+                tiouPrecisionStrMat = defaultdict(dict)
+                tiouGtRectMat = np.zeros(len(gtPols),np.int8)
+                tiouDetRectMat = np.zeros(len(detPols),np.int8)
                 for gtNum in range(len(gtPols)):
                     for detNum in range(len(detPols)):
                         pG = gtPols[gtNum]
                         pD = detPols[detNum]
                         iouMat[gtNum,detNum] = get_intersection_over_union(pD,pG)
                         tiouRecallMat[gtNum,detNum], tiouRecallStrMat[gtNum][detNum] = get_text_intersection_over_union_recall(pD,pG)
-                        tiouPrecisionMat[gtNum,detNum], tiouPrecisionStrMat[gtNum][detNum] = get_text_intersection_over_union_precision(pD, pG, gtNum, gtPols, gtDontCarePolsNum)  
+                        tiouPrecisionMat[gtNum,detNum], tiouPrecisionStrMat[gtNum][detNum] = get_text_intersection_over_union_precision(pD, pG, gtNum, gtPols, gtDontCarePolsNum)
 
                 for gtNum in range(len(gtPols)):
                     for detNum in range(len(detPols)):
@@ -251,29 +266,29 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
                                       )
                                       if correct:
                                           detMatched += 1
-                                          detMatched_iou += iouMat[gtNum,detNum] 
-                                          detMatched_tiouGt += tiouRecallMat[gtNum,detNum] 
-                                          detMatched_tiouDt += tiouPrecisionMat[gtNum,detNum] 
-                                          if iouMat[gtNum,detNum] != tiouRecallMat[gtNum,detNum]: 
+                                          detMatched_iou += iouMat[gtNum,detNum]
+                                          detMatched_tiouGt += tiouRecallMat[gtNum,detNum]
+                                          detMatched_tiouDt += tiouPrecisionMat[gtNum,detNum]
+                                          if iouMat[gtNum,detNum] != tiouRecallMat[gtNum,detNum]:
                                               detMatched_cutGt +=1
-                                          if iouMat[gtNum,detNum] != tiouPrecisionMat[gtNum,detNum]: 
+                                          if iouMat[gtNum,detNum] != tiouPrecisionMat[gtNum,detNum]:
                                               detMatched_coverOtherGt +=1
                                           pairs.append({'gt':gtNum,'det':detNum})
                                           detMatchedNums.append(detNum)
                                           evaluationLog += "Match GT #" + str(gtNum) + " with Det #" + str(detNum) + " trans. correct: " + str(correct) + "\n"
                                 else:
                                   detMatched += 1
-                                  detMatched_iou += iouMat[gtNum,detNum] 
-                                  detMatched_tiouGt += tiouRecallMat[gtNum,detNum] 
-                                  detMatched_tiouDt += tiouPrecisionMat[gtNum,detNum] 
-                                  if  iouMat[gtNum,detNum] != tiouRecallMat[gtNum,detNum]: 
+                                  detMatched_iou += iouMat[gtNum,detNum]
+                                  detMatched_tiouGt += tiouRecallMat[gtNum,detNum]
+                                  detMatched_tiouDt += tiouPrecisionMat[gtNum,detNum]
+                                  if  iouMat[gtNum,detNum] != tiouRecallMat[gtNum,detNum]:
                                       detMatched_cutGt +=1
-                                  if  iouMat[gtNum,detNum] != tiouPrecisionMat[gtNum,detNum]: 
+                                  if  iouMat[gtNum,detNum] != tiouPrecisionMat[gtNum,detNum]:
                                       detMatched_coverOtherGt +=1
                                   pairs.append({'gt':gtNum,'det':detNum})
                                   detMatchedNums.append(detNum)
                                   evaluationLog += "Match GT #" + str(gtNum) + " with Det #" + str(detNum) + "\n"
-                            
+
         numGtCare = (len(gtPols) - len(gtDontCarePolsNum))
         numDetCare = (len(detPols) - len(detDontCarePolsNum))
         if numGtCare == 0:
@@ -281,29 +296,29 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             precision = float(0) if numDetCare >0 else float(1)
             iouRecall = float(1)
             iouPrecision = float(0) if numDetCare > 0 else float(1)
-            tiouRecall = float(1) 
+            tiouRecall = float(1)
             tiouPrecision = float(0) if numDetCare >0 else float(1)
         else:
             recall = float(detMatched) / numGtCare
             precision = 0 if numDetCare==0 else float(detMatched) / numDetCare
-            iouRecall = float(detMatched_iou) / numGtCare 
-            iouPrecision = 0 if numDetCare==0 else float(detMatched_iou) / numDetCare 
-            tiouRecall = float(detMatched_tiouGt) / numGtCare 
-            tiouPrecision = 0 if numDetCare==0 else float(detMatched_tiouDt) / numDetCare 
+            iouRecall = float(detMatched_iou) / numGtCare
+            iouPrecision = 0 if numDetCare==0 else float(detMatched_iou) / numDetCare
+            tiouRecall = float(detMatched_tiouGt) / numGtCare
+            tiouPrecision = 0 if numDetCare==0 else float(detMatched_tiouDt) / numDetCare
 
         hmean = 0 if (precision + recall)==0 else 2.0 * precision * recall / (precision + recall)
-        tiouHmean = 0 if (tiouPrecision + tiouRecall)==0 else 2.0 * tiouPrecision * tiouRecall / (tiouPrecision + tiouRecall)     
-        iouHmean = 0 if (iouPrecision + iouRecall)==0 else 2.0 * iouPrecision * iouRecall / (iouPrecision + iouRecall)     
+        tiouHmean = 0 if (tiouPrecision + tiouRecall)==0 else 2.0 * tiouPrecision * tiouRecall / (tiouPrecision + tiouRecall)
+        iouHmean = 0 if (iouPrecision + iouRecall)==0 else 2.0 * iouPrecision * iouRecall / (iouPrecision + iouRecall)
 
         matchedSum += detMatched
-        matchedSum_iou += detMatched_iou 
-        matchedSum_tiouGt += detMatched_tiouGt 
-        matchedSum_tiouDt += detMatched_tiouDt 
-        matchedSum_cutGt += detMatched_cutGt 
-        matchedSum_coverOtherGt += detMatched_coverOtherGt 
+        matchedSum_iou += detMatched_iou
+        matchedSum_tiouGt += detMatched_tiouGt
+        matchedSum_tiouDt += detMatched_tiouDt
+        matchedSum_cutGt += detMatched_cutGt
+        matchedSum_coverOtherGt += detMatched_coverOtherGt
         numGlobalCareGt += numGtCare
         numGlobalCareDet += numDetCare
-        
+
         perSampleMetrics[gt_key] = {
             'precision':precision,
             'recall':recall,
@@ -325,15 +340,15 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             'gtDontCare':gtDontCarePolsNum,
             'detDontCare':detDontCarePolsNum,
             'eval_config': eval_config,
-            'evaluationLog': evaluationLog                                        
+            'evaluationLog': evaluationLog
         }
-        
+
         if eval_config["WORD_SPOTTING"]:
                 perSampleMetrics[gt_key]["gtTrans"] = gtTrans
                 perSampleMetrics[gt_key]["detTrans"] = detTrans
 
         try:
-            totalNumGtPols += len(gtPols) 
+            totalNumGtPols += len(gtPols)
             totalNumDetPols += len(detPols)
         except Exception as e:
             raise e
@@ -344,18 +359,18 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
     methodHmean = 0 if methodRecall + methodPrecision==0 else 2* methodRecall * methodPrecision / (methodRecall + methodPrecision)
 
 
-    methodRecall_iou = 0 if numGlobalCareGt == 0 else float(matchedSum_iou)/numGlobalCareGt 
-    methodPrecision_iou = 0 if numGlobalCareDet == 0 else float(matchedSum_iou)/numGlobalCareDet 
-    iouMethodHmean = 0 if methodRecall_iou + methodPrecision_iou==0 else 2* methodRecall_iou * methodPrecision_iou / (methodRecall_iou + methodPrecision_iou) 
+    methodRecall_iou = 0 if numGlobalCareGt == 0 else float(matchedSum_iou)/numGlobalCareGt
+    methodPrecision_iou = 0 if numGlobalCareDet == 0 else float(matchedSum_iou)/numGlobalCareDet
+    iouMethodHmean = 0 if methodRecall_iou + methodPrecision_iou==0 else 2* methodRecall_iou * methodPrecision_iou / (methodRecall_iou + methodPrecision_iou)
 
-    methodRecall_tiouGt = 0 if numGlobalCareGt == 0 else float(matchedSum_tiouGt)/numGlobalCareGt 
-    methodPrecision_tiouDt = 0 if numGlobalCareDet == 0 else float(matchedSum_tiouDt)/numGlobalCareDet 
-    tiouMethodHmean = 0 if methodRecall_tiouGt + methodPrecision_tiouDt==0 else 2* methodRecall_tiouGt * methodPrecision_tiouDt / (methodRecall_tiouGt + methodPrecision_tiouDt) 
-    
+    methodRecall_tiouGt = 0 if numGlobalCareGt == 0 else float(matchedSum_tiouGt)/numGlobalCareGt
+    methodPrecision_tiouDt = 0 if numGlobalCareDet == 0 else float(matchedSum_tiouDt)/numGlobalCareDet
+    tiouMethodHmean = 0 if methodRecall_tiouGt + methodPrecision_tiouDt==0 else 2* methodRecall_tiouGt * methodPrecision_tiouDt / (methodRecall_tiouGt + methodPrecision_tiouDt)
+
     methodMetrics = {'precision':methodPrecision, 'recall':methodRecall,'hmean': methodHmean}
     iouMethodMetrics = {'iouPrecision':methodPrecision_iou, 'iouRecall':methodRecall_iou,'iouHmean': iouMethodHmean }
     tiouMethodMetrics = {'tiouPrecision':methodPrecision_tiouDt, 'tiouRecall':methodRecall_tiouGt,'tiouHmean': tiouMethodHmean }
-    
+
     # print('matchedSum: ', matchedSum, 'matchedSum_cutGt: ', matchedSum_cutGt, 'cut_Rate: ', round(matchedSum_cutGt*1.0/matchedSum, 3), 'matchedSum_coverOtherGt: ', matchedSum_coverOtherGt, 'cover_Outlier_Rate: ', round(matchedSum_coverOtherGt*1.0/matchedSum, 3))
     # print('Origin:')
     # print(f"recall: {round(methodRecall,3)}, precision: {round(methodPrecision,3)}, hmean: {round(methodHmean,3)}")
@@ -365,8 +380,8 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
     # print(f"tiouRecall: {round(methodRecall_tiouGt,3)}, tiouPrecision: {round(methodPrecision_tiouDt,3)}, tiouHmean: {round(tiouMethodHmean,3)}")
 
     resDict = {'calculated':True,'Message':'','method': methodMetrics,'per_sample': perSampleMetrics, 'iouMethod': iouMethodMetrics, 'tiouMethod': tiouMethodMetrics}
-    
-    
+
+
     return resDict
 
 
