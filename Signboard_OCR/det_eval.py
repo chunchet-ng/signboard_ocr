@@ -28,49 +28,62 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
         resDict (Dict): A dict storing overall and per-sample evaluation result
     """
 
-    def polygon_from_points(points):
+    def polygon_from_points(points: List[int]):
         """
         Returns a Polygon object to use with the Polygon2 class from a list of 8 points: x1,y1,x2,y2,x3,y3,x4,y4
+        
+        Args:
+            points (List[int]): Bounding box points, [x1,y1,x2,y2,x3,y3,x4,y4]
+        Returns:
+            Ploygon (plg.Polygon): Polygon3's polygon
         """
         num_points = len(points)
         # resBoxes=np.empty([1,num_points],dtype='int32')
-        resBoxes=np.empty([1,num_points],dtype='float32')
+        resBoxes = np.empty([1, num_points], dtype='float32')
         for inp in range(0, num_points, 2):
             resBoxes[0, inp//2] = float(points[inp])
             resBoxes[0, inp//2+num_points//2] = float(points[inp+1])
-        pointMat = resBoxes[0].reshape([2,num_points//2]).T
+        pointMat = resBoxes[0].reshape([2, num_points//2]).T
         return plg.Polygon(pointMat)
 
-    def get_union(pD,pG):
+    def get_union(pD: plg.Polygon, pG: plg.Polygon):
+        """Get union area of two polygons
+        """
         areaA = pD.area()
         areaB = pG.area()
         return areaA + areaB - get_intersection(pD, pG)
 
-    def get_intersection_over_union(pD,pG):
+    def get_intersection_over_union(pD: plg.Polygon, pG: plg.Polygon):
+        """Get intersection area of two polygons
+        """
         try:
             return get_intersection(pD, pG) / get_union(pD, pG)
         except:
             return 0
 
-    def funcCt(x):
+    def funcCt(x: float):
+        """Compute the portion of gt covered by detected bounding box
+        """
         if x<=0.01:
             return 1
         else:
             return 1-x
 
-    def funcOt(x):
+    def funcOt(x: float):
+        """Compute the portion of dectected bounding box intersecting with gt
+        """
         if x<=0.01:
             return 1
         else:
             return 1-x
 
-    def get_text_intersection_over_union_recall(pD, pG):
-        '''
-        Ct (cut): Area of ground truth that is not covered by detection bounding box.
+    def get_text_intersection_over_union_recall(pD: plg.Polygon, pG: plg.Polygon):
+        '''Return TIoU-recall of two polygons
         '''
         try:
             intersection = get_intersection(pD, pG)
             union = get_union(pD, pG)
+            #  Area of ground truth that is not covered by detection bounding box.
             Ct = pG.area() - intersection
             assert(Ct>=0 and Ct<=pG.area()), 'Invalid Ct value'
             assert(pG.area()>0), 'Invalid Gt'
@@ -81,10 +94,12 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             return 0, ""
 
 
-    def get_text_intersection_over_union_precision(pD, pG, gtNum, gtPolys, gtDontCarePolsNum):
+    def get_text_intersection_over_union_precision(pD: plg.Polygon, pG: plg.Polygon, gtNum: int,
+                                                   gtPolys: List[plg.Polygon], gtDontCarePolsNum: List[plg.Polygon]):
         '''
-        Ot: Outlier gt area
+        Return TIoU-precision of two polygons
         '''
+        # Outlier gt area
         Ot = 0
         try:
             inside_pG = pD & pG
@@ -124,7 +139,9 @@ def evaluation(gt_dict: Dict[str, List], det_dict: Dict[str, List], eval_config:
             return 0, ""
 
 
-    def get_intersection(pD,pG):
+    def get_intersection(pD: plg.Polygon, pG: plg.Polygon):
+        """Return intersection of two polygons
+        """
         pInt = pD & pG
         if len(pInt) == 0:
             return 0
